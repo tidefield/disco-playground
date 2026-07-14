@@ -20,18 +20,26 @@
         <div class="actions">
           <button id="load" type="button">Load</button>
           <button id="save" type="button">Save</button>
+          <button id="new-file" type="button">New file</button>
+          <button id="delete-file" type="button">Delete file</button>
           <a id="open" href="/p/hello-rc/" target="_blank" rel="noreferrer">Open</a>
         </div>
       </section>
 
       <section class="workspace">
         <div class="editor-panel">
-          <div class="tabs" role="tablist" aria-label="Files">
-            <button class="tab active" type="button" data-file="html">HTML</button>
-            <button class="tab" type="button" data-file="css">CSS</button>
-            <button class="tab" type="button" data-file="js">JS</button>
+          <div class="file-layout">
+            <aside class="file-tree-panel" aria-label="Files">
+              <div class="file-tree-title">Files</div>
+              <div id="file-tree" class="file-tree"></div>
+            </aside>
+            <div class="code-panel">
+              <div class="filebar">
+                <input id="file-path" autocomplete="off" spellcheck="false" aria-label="Current file path" />
+              </div>
+              <textarea id="editor" spellcheck="false" aria-label="Code editor"></textarea>
+            </div>
           </div>
-          <textarea id="editor" spellcheck="false" aria-label="Code editor"></textarea>
         </div>
 
         <div class="preview-panel">

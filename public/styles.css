@@ -78,7 +78,7 @@ h1 {
 
 .actions button,
 .actions a,
-.tab {
+.filebar select {
   min-height: 38px;
   border: 1px solid #191714;
   border-radius: 6px;
@@ -103,7 +103,6 @@ h1 {
   gap: 16px;
 }
 
-.editor-panel,
 .preview-panel {
   min-height: 0;
   display: grid;
@@ -114,7 +113,77 @@ h1 {
   background: #fffaf2;
 }
 
-.tabs,
+.editor-panel {
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid #d8cdbb;
+  border-radius: 8px;
+  background: #fffaf2;
+}
+
+.file-layout {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(160px, 220px) minmax(0, 1fr);
+}
+
+.file-tree-panel {
+  min-width: 0;
+  overflow: auto;
+  border-right: 1px solid #d8cdbb;
+  background: #f7f1e8;
+}
+
+.file-tree-title {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border-bottom: 1px solid #d8cdbb;
+  color: #6f604c;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.file-tree {
+  padding: 8px 0;
+}
+
+.tree-row {
+  width: 100%;
+  min-height: 30px;
+  display: block;
+  border: 0;
+  border-radius: 0;
+  padding: 0 8px 0 calc(12px + var(--indent));
+  background: transparent;
+  color: #2b261f;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.tree-row:hover,
+.tree-row.active {
+  background: #e7dccd;
+}
+
+.tree-row.folder {
+  color: #6f604c;
+}
+
+.code-panel {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+.filebar,
 .preview-bar {
   min-height: 48px;
   display: flex;
@@ -124,16 +193,20 @@ h1 {
   border-bottom: 1px solid #d8cdbb;
 }
 
-.tab {
-  min-width: 64px;
-  justify-content: center;
+.filebar select {
+  width: min(45%, 280px);
   border-color: #c8baa5;
 }
 
-.tab.active {
-  border-color: #191714;
-  background: #191714;
-  color: #ffffff;
+.filebar input {
+  flex: 1;
+  min-width: 0;
+  min-height: 38px;
+  border: 1px solid #c8baa5;
+  border-radius: 6px;
+  padding: 0 12px;
+  background: #ffffff;
+  color: #191714;
 }
 
 #editor {

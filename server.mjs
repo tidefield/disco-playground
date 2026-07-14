@@ -9,13 +9,25 @@ const dataRoot = resolve(process.env.PLAYGROUND_DATA_DIR || ".data");
 const maxBodySize = 512 * 1024;
 
 const defaultFiles = {
-  html: `<main>
+  "index.html": `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Hello RC</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <main>
   <p class="kicker">hello from the playground</p>
   <h1>Build something small and strange.</h1>
   <p>Change the code, save it, then share the live URL with another Recurser.</p>
   <button id="spark">Make it sparkle</button>
-</main>`,
-  css: `body {
+    </main>
+    <script src="script.js"></script>
+  </body>
+</html>`,
+  "style.css": `body {
   margin: 0;
   min-height: 100vh;
   display: grid;
@@ -49,7 +61,7 @@ button {
   color: inherit;
   cursor: pointer;
 }`,
-  js: `document.querySelector("#spark")?.addEventListener("click", () => {
+  "script.js": `document.querySelector("#spark")?.addEventListener("click", () => {
   document.body.style.background = \`hsl(\${Math.random() * 360} 70% 88%)\`;
 });`,
 };
@@ -61,6 +73,10 @@ const contentTypes = new Map([
   [".js", "text/javascript; charset=utf-8"],
   [".json", "application/json; charset=utf-8"],
   [".png", "image/png"],
+  [".jpg", "image/jpeg"],
+  [".jpeg", "image/jpeg"],
+  [".gif", "image/gif"],
+  [".webp", "image/webp"],
   [".svg", "image/svg+xml"],
   [".txt", "text/plain; charset=utf-8"],
 ]);
@@ -73,6 +89,45 @@ function appFilePath(slug) {
   return join(dataRoot, `${slug}.json`);
 }
 
+function normalizeAppPath(value) {
+  const decoded = String(value || "").replaceAll("\\", "/").replace(/^\/+/, "");
+  const normalized = normalize(decoded).replaceAll("\\", "/");
+
+  if (
+    !normalized ||
+    normalized === "." ||
+    normalized.startsWith("../") ||
+    normalized.includes("/../") ||
+    normalized.length > 160
+  ) {
+    return null;
+  }
+
+  return normalized;
+}
+
+function normalizeFiles(input) {
+  const source = input && typeof input === "object" ? input : {};
+  const rawFiles = source.files && typeof source.files === "object" ? source.files : source;
+  const files = {};
+
+  for (const [path, content] of Object.entries(rawFiles)) {
+    const normalized = normalizeAppPath(path);
+    if (!normalized || typeof content !== "string" || content.length > maxBodySize) {
+      continue;
+    }
+    files[normalized] = content;
+  }
+
+  if (!Object.keys(files).length && "html" in source) {
+    files["index.html"] = String(source.html || "");
+    files["style.css"] = String(source.css || "");
+    files["script.js"] = String(source.js || "");
+  }
+
+  return Object.keys(files).length ? files : { ...defaultFiles };
+}
+
 function sendJson(response, status, payload) {
   response.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
   response.end(JSON.stringify(payload));
@@ -83,23 +138,26 @@ function sendHtml(response, status, html) {
   response.end(html);
 }
 
-function escapeScript(value) {
-  return value.replaceAll("</script", "<\\/script");
+function responseType(path) {
+  return contentTypes.get(extname(path)) || "application/octet-stream";
 }
 
-function renderApp(files) {
-  return `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>${files.css}</style>
-  </head>
-  <body>
-    ${files.html}
-    <script>${escapeScript(files.js)}</script>
-  </body>
-</html>`;
+function appRequestPath(pathname, slug) {
+  const prefix = `/p/${slug}`;
+  const relative = pathname.slice(prefix.length).replace(/^\/+/, "");
+  const normalized = normalizeAppPath(relative || "index.html");
+  if (!normalized) {
+    return null;
+  }
+  return normalized.endsWith("/") ? `${normalized}index.html` : normalized;
+}
+
+function appCandidates(pathname, slug) {
+  const requested = appRequestPath(pathname, slug);
+  if (!requested) {
+    return [];
+  }
+  return extname(requested) ? [requested] : [requested, `${requested}/index.html`];
 }
 
 async function readBody(request) {
@@ -124,30 +182,27 @@ async function readApp(slug) {
 
   try {
     const saved = JSON.parse(await readFile(appFilePath(slug), "utf8"));
+    const files = saved.files ? normalizeFiles(saved.files) : normalizeFiles(saved);
     return {
-      html: typeof saved.html === "string" ? saved.html : defaultFiles.html,
-      css: typeof saved.css === "string" ? saved.css : defaultFiles.css,
-      js: typeof saved.js === "string" ? saved.js : defaultFiles.js,
+      files,
       updatedAt: saved.updatedAt || null,
     };
   } catch (error) {
     if (error.code === "ENOENT") {
-      return { ...defaultFiles, updatedAt: null };
+      return { files: { ...defaultFiles }, updatedAt: null };
     }
     throw error;
   }
 }
 
-async function saveApp(slug, files) {
+async function saveApp(slug, payload) {
   await mkdir(dataRoot, { recursive: true });
-  const payload = {
-    html: String(files.html || ""),
-    css: String(files.css || ""),
-    js: String(files.js || ""),
+  const saved = {
+    files: normalizeFiles(payload),
     updatedAt: new Date().toISOString(),
   };
-  await writeFile(appFilePath(slug), JSON.stringify(payload, null, 2));
-  return payload;
+  await writeFile(appFilePath(slug), JSON.stringify(saved, null, 2));
+  return saved;
 }
 
 function publicPath(pathname) {
@@ -184,7 +239,7 @@ createServer(async (request, response) => {
   try {
     const url = new URL(request.url || "/", `http://${request.headers.host || "localhost"}`);
     const apiMatch = url.pathname.match(/^\/api\/apps\/([a-z0-9-]+)$/);
-    const appMatch = url.pathname.match(/^\/p\/([a-z0-9-]+)\/?$/);
+    const appMatch = url.pathname.match(/^\/p\/([a-z0-9-]+)(?:\/.*)?$/);
 
     if (apiMatch) {
       const slug = apiMatch[1];
@@ -210,12 +265,21 @@ createServer(async (request, response) => {
     }
 
     if (appMatch && request.method === "GET") {
-      const files = await readApp(appMatch[1]);
-      if (!files) {
+      const app = await readApp(appMatch[1]);
+      if (!app) {
         sendHtml(response, 404, "Not found");
         return;
       }
-      sendHtml(response, 200, renderApp(files));
+
+      for (const candidate of appCandidates(url.pathname, appMatch[1])) {
+        if (candidate in app.files) {
+          response.writeHead(200, { "Content-Type": responseType(candidate) });
+          response.end(app.files[candidate]);
+          return;
+        }
+      }
+
+      response.writeHead(404).end("Not found");
       return;
     }
 

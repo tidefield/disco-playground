@@ -28,6 +28,11 @@ on:
         required: false
         type: string
         default: "22"
+      commit-message:
+        description: Commit message for the published build branch.
+        required: false
+        type: string
+        default: Publish static build
 
 permissions:
   contents: write
@@ -87,3 +92,4 @@ jobs:
           branch: ${{ inputs.branch }}
           folder: ${{ inputs.output-dir }}
           clean: true
+          commit-message: ${{ inputs.commit-message }}

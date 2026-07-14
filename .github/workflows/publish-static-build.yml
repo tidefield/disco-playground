@@ -1,0 +1,89 @@
+name: Publish static build
+
+on:
+  workflow_call:
+    inputs:
+      install-command:
+        description: Command that installs project dependencies.
+        required: false
+        type: string
+        default: npm ci
+      build-command:
+        description: Command that builds the static site.
+        required: false
+        type: string
+        default: npm run build
+      output-dir:
+        description: Directory containing the built static site.
+        required: false
+        type: string
+        default: dist
+      branch:
+        description: Branch to publish the static build to.
+        required: false
+        type: string
+        default: build
+      node-version:
+        description: Node.js version to use.
+        required: false
+        type: string
+        default: "22"
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: npm
+
+      - name: Install dependencies
+        run: ${{ inputs.install-command }}
+
+      - name: Build
+        run: ${{ inputs.build-command }}
+
+      - name: Write manifest
+        env:
+          OUTPUT_DIR: ${{ inputs.output-dir }}
+        run: |
+          node --input-type=module <<'EOF'
+          import { readdir, writeFile } from "node:fs/promises";
+          import { join } from "node:path";
+
+          const outputDir = process.env.OUTPUT_DIR;
+
+          async function walk(dir, prefix = "") {
+            const entries = await readdir(dir, { withFileTypes: true });
+            const files = [];
+            for (const entry of entries) {
+              const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+              const fullPath = join(dir, entry.name);
+              if (entry.isDirectory()) {
+                files.push(...await walk(fullPath, relative));
+              } else if (entry.isFile()) {
+                files.push(relative);
+              }
+            }
+            return files;
+          }
+
+          const files = (await walk(outputDir)).sort();
+          await writeFile(join(outputDir, "manifest.json"), `${JSON.stringify({ files }, null, 2)}\n`);
+          EOF
+
+      - name: Publish build branch
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: ${{ inputs.branch }}
+          folder: ${{ inputs.output-dir }}
+          clean: true

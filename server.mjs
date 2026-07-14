@@ -1,69 +1,22 @@
 import { createReadStream, existsSync } from "node:fs";
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, join, normalize, resolve } from "node:path";
 
 const port = Number(process.env.PORT || 8080);
 const publicRoot = resolve("public");
 const dataRoot = resolve(process.env.PLAYGROUND_DATA_DIR || ".data");
-const maxBodySize = 512 * 1024;
+const maxBodySize = 20 * 1024 * 1024;
+const maxFileSize = 5 * 1024 * 1024;
+const textExtensions = new Set([".css", ".csv", ".html", ".js", ".json", ".md", ".mjs", ".svg", ".txt", ".xml"]);
 
-const defaultFiles = {
+const defaultProject = {
+  files: {
   "index.html": `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Hello RC</title>
-    <link rel="stylesheet" href="style.css">
-  </head>
-  <body>
-    <main>
-  <p class="kicker">hello from the playground</p>
-  <h1>Build something small and strange.</h1>
-  <p>Change the code, save it, then share the live URL with another Recurser.</p>
-  <button id="spark">Make it sparkle</button>
-    </main>
-    <script src="script.js"></script>
-  </body>
-</html>`,
-  "style.css": `body {
-  margin: 0;
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: #f7f2e8;
-  color: #1d1a16;
-}
-
-main {
-  width: min(720px, calc(100vw - 32px));
-}
-
-.kicker {
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  font-size: 12px;
-}
-
-h1 {
-  font-size: clamp(40px, 9vw, 88px);
-  line-height: 0.95;
-  margin: 0 0 20px;
-}
-
-button {
-  border: 1px solid #1d1a16;
-  border-radius: 6px;
-  padding: 10px 14px;
-  background: #ffffff;
-  color: inherit;
-  cursor: pointer;
-}`,
-  "script.js": `document.querySelector("#spark")?.addEventListener("click", () => {
-  document.body.style.background = \`hsl(\${Math.random() * 360} 70% 88%)\`;
-});`,
+<h1>Hello, RC</h1>`,
+  },
+  updatedAt: null,
+  updatedBy: null,
 };
 
 const contentTypes = new Map([
@@ -81,12 +34,12 @@ const contentTypes = new Map([
   [".txt", "text/plain; charset=utf-8"],
 ]);
 
-function isSlug(value) {
-  return /^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/.test(value);
+function currentFilePath() {
+  return join(dataRoot, "current.json");
 }
 
-function appFilePath(slug) {
-  return join(dataRoot, `${slug}.json`);
+function historyRoot() {
+  return join(dataRoot, "history");
 }
 
 function normalizeAppPath(value) {
@@ -113,10 +66,27 @@ function normalizeFiles(input) {
 
   for (const [path, content] of Object.entries(rawFiles)) {
     const normalized = normalizeAppPath(path);
-    if (!normalized || typeof content !== "string" || content.length > maxBodySize) {
+    if (!normalized) {
       continue;
     }
-    files[normalized] = content;
+
+    if (typeof content === "string" && content.length <= maxFileSize) {
+      files[normalized] = content;
+      continue;
+    }
+
+    if (
+      content &&
+      typeof content === "object" &&
+      content.encoding === "base64" &&
+      typeof content.content === "string" &&
+      Buffer.byteLength(content.content, "base64") <= maxFileSize
+    ) {
+      files[normalized] = {
+        encoding: "base64",
+        content: content.content,
+      };
+    }
   }
 
   if (!Object.keys(files).length && "html" in source) {
@@ -125,7 +95,20 @@ function normalizeFiles(input) {
     files["script.js"] = String(source.js || "");
   }
 
-  return Object.keys(files).length ? files : { ...defaultFiles };
+  return Object.keys(files).length ? files : { ...defaultProject.files };
+}
+
+function stripCommonRoot(paths) {
+  if (!paths.length || paths.some((path) => !path.includes("/"))) {
+    return paths;
+  }
+
+  const firstSegments = paths.map((path) => path.split("/")[0]);
+  if (!firstSegments.every((segment) => segment === firstSegments[0])) {
+    return paths;
+  }
+
+  return paths.map((path) => path.split("/").slice(1).join("/")).filter(Boolean);
 }
 
 function sendJson(response, status, payload) {
@@ -142,9 +125,24 @@ function responseType(path) {
   return contentTypes.get(extname(path)) || "application/octet-stream";
 }
 
-function appRequestPath(pathname, slug) {
-  const prefix = `/p/${slug}`;
-  const relative = pathname.slice(prefix.length).replace(/^\/+/, "");
+function isTextPath(path) {
+  return textExtensions.has(extname(path).toLowerCase());
+}
+
+function fileResponseBody(file) {
+  if (typeof file === "string") {
+    return file;
+  }
+
+  if (file && typeof file === "object" && file.encoding === "base64") {
+    return Buffer.from(file.content, "base64");
+  }
+
+  return "";
+}
+
+function projectRequestPath(pathname) {
+  const relative = pathname.replace(/^\/+/, "");
   const normalized = normalizeAppPath(relative || "index.html");
   if (!normalized) {
     return null;
@@ -152,8 +150,8 @@ function appRequestPath(pathname, slug) {
   return normalized.endsWith("/") ? `${normalized}index.html` : normalized;
 }
 
-function appCandidates(pathname, slug) {
-  const requested = appRequestPath(pathname, slug);
+function projectCandidates(pathname) {
+  const requested = projectRequestPath(pathname);
   if (!requested) {
     return [];
   }
@@ -175,34 +173,116 @@ async function readBody(request) {
   return Buffer.concat(chunks).toString("utf8");
 }
 
-async function readApp(slug) {
-  if (!isSlug(slug)) {
-    return null;
+async function importManifest(rawUrl) {
+  const manifestUrl = new URL(rawUrl);
+  if (manifestUrl.protocol !== "https:" || manifestUrl.hostname !== "raw.githubusercontent.com") {
+    throw new Error("Use a raw.githubusercontent.com manifest URL.");
   }
 
+  const manifestResponse = await fetch(manifestUrl, {
+    headers: { "User-Agent": "disco-playground" },
+  });
+  if (!manifestResponse.ok) {
+    throw new Error(`Manifest download failed with ${manifestResponse.status}`);
+  }
+
+  const manifest = await manifestResponse.json();
+  const paths = Array.isArray(manifest.files) ? manifest.files : [];
+  const baseUrl = new URL(".", manifestUrl);
+  const files = {};
+
+  for (const rawPath of paths) {
+    const path = normalizeAppPath(rawPath);
+    if (!path) {
+      continue;
+    }
+
+    const fileUrl = new URL(encodeURI(path), baseUrl);
+    const fileResponse = await fetch(fileUrl, {
+      headers: { "User-Agent": "disco-playground" },
+    });
+    if (!fileResponse.ok) {
+      continue;
+    }
+
+    const bytes = new Uint8Array(await fileResponse.arrayBuffer());
+    if (bytes.byteLength > maxFileSize) {
+      continue;
+    }
+
+    if (isTextPath(path)) {
+      files[path] = new TextDecoder().decode(bytes);
+    } else {
+      files[path] = {
+        encoding: "base64",
+        content: Buffer.from(bytes).toString("base64"),
+      };
+    }
+  }
+
+  const saved = await saveProject({ files });
+  return {
+    files: Object.keys(saved.files).sort(),
+    updatedAt: saved.updatedAt,
+  };
+}
+
+async function readProject() {
   try {
-    const saved = JSON.parse(await readFile(appFilePath(slug), "utf8"));
+    const saved = JSON.parse(await readFile(currentFilePath(), "utf8"));
     const files = saved.files ? normalizeFiles(saved.files) : normalizeFiles(saved);
     return {
       files,
       updatedAt: saved.updatedAt || null,
+      updatedBy: saved.updatedBy || null,
     };
   } catch (error) {
     if (error.code === "ENOENT") {
-      return { files: { ...defaultFiles }, updatedAt: null };
+      return { ...defaultProject, files: { ...defaultProject.files } };
     }
     throw error;
   }
 }
 
-async function saveApp(slug, payload) {
+async function saveProject(payload) {
   await mkdir(dataRoot, { recursive: true });
   const saved = {
     files: normalizeFiles(payload),
     updatedAt: new Date().toISOString(),
+    updatedBy: "local",
   };
-  await writeFile(appFilePath(slug), JSON.stringify(saved, null, 2));
+  await writeFile(currentFilePath(), JSON.stringify(saved, null, 2));
+  await writeRevision(saved);
   return saved;
+}
+
+async function writeRevision(saved) {
+  const root = historyRoot();
+  await mkdir(root, { recursive: true });
+  const stamp = saved.updatedAt.replaceAll(":", "-");
+  await writeFile(join(root, `${stamp}.json`), JSON.stringify(saved, null, 2));
+}
+
+async function readHistory() {
+  try {
+    const names = (await readdir(historyRoot())).filter((name) => name.endsWith(".json")).sort().reverse();
+    return Promise.all(
+      names.slice(0, 20).map(async (name) => {
+        const saved = JSON.parse(await readFile(join(historyRoot(), name), "utf8"));
+        return {
+          id: name.replace(/\.json$/, ""),
+          updatedAt: saved.updatedAt || null,
+          updatedBy: saved.updatedBy || null,
+          files: Object.keys(normalizeFiles(saved.files || saved)).sort(),
+        };
+      }),
+    );
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return [];
+    }
+    throw error;
+  }
 }
 
 function publicPath(pathname) {
@@ -212,7 +292,8 @@ function publicPath(pathname) {
 }
 
 async function servePublic(pathname, response) {
-  const requested = publicPath(pathname);
+  const assetPathname = pathname === "/edit" ? "/edit.html" : pathname;
+  const requested = publicPath(assetPathname);
   const candidates = [requested, join(requested, "index.html"), join(publicRoot, "index.html")];
 
   for (const candidate of candidates) {
@@ -238,25 +319,17 @@ async function servePublic(pathname, response) {
 createServer(async (request, response) => {
   try {
     const url = new URL(request.url || "/", `http://${request.headers.host || "localhost"}`);
-    const apiMatch = url.pathname.match(/^\/api\/apps\/([a-z0-9-]+)$/);
-    const appMatch = url.pathname.match(/^\/p\/([a-z0-9-]+)(?:\/.*)?$/);
 
-    if (apiMatch) {
-      const slug = apiMatch[1];
-      if (!isSlug(slug)) {
-        sendJson(response, 400, { error: "Use 3-40 lowercase letters, numbers, or hyphens." });
-        return;
-      }
-
+    if (url.pathname === "/api/files") {
       if (request.method === "GET") {
-        sendJson(response, 200, await readApp(slug));
+        sendJson(response, 200, await readProject());
         return;
       }
 
       if (request.method === "PUT") {
         const files = JSON.parse(await readBody(request));
-        const saved = await saveApp(slug, files);
-        sendJson(response, 200, { ok: true, url: `/p/${slug}/`, updatedAt: saved.updatedAt });
+        const saved = await saveProject(files);
+        sendJson(response, 200, { ok: true, url: "/", updatedAt: saved.updatedAt });
         return;
       }
 
@@ -264,29 +337,48 @@ createServer(async (request, response) => {
       return;
     }
 
-    if (appMatch && request.method === "GET") {
-      const app = await readApp(appMatch[1]);
-      if (!app) {
-        sendHtml(response, 404, "Not found");
+    if (url.pathname === "/api/history") {
+      if (request.method === "GET") {
+        sendJson(response, 200, { revisions: await readHistory() });
         return;
       }
 
-      for (const candidate of appCandidates(url.pathname, appMatch[1])) {
-        if (candidate in app.files) {
-          response.writeHead(200, { "Content-Type": responseType(candidate) });
-          response.end(app.files[candidate]);
-          return;
-        }
-      }
-
-      response.writeHead(404).end("Not found");
+      sendJson(response, 405, { error: "Method not allowed" });
       return;
     }
 
-    await servePublic(url.pathname, response);
+    if (url.pathname === "/api/import-manifest") {
+      if (request.method === "POST") {
+        const body = JSON.parse(await readBody(request));
+        const imported = await importManifest(body.url);
+        sendJson(response, 200, { ok: true, ...imported });
+        return;
+      }
+
+      sendJson(response, 405, { error: "Method not allowed" });
+      return;
+    }
+
+    if (url.pathname === "/edit" || url.pathname.startsWith("/styles.css") || url.pathname.startsWith("/app.js")) {
+      await servePublic(url.pathname, response);
+      return;
+    }
+
+    if (request.method === "GET") {
+      const project = await readProject();
+      for (const candidate of projectCandidates(url.pathname)) {
+        if (candidate in project.files) {
+          response.writeHead(200, { "Content-Type": responseType(candidate) });
+          response.end(fileResponseBody(project.files[candidate]));
+          return;
+        }
+      }
+    }
+
+    response.writeHead(404).end("Not found");
   } catch (error) {
     console.error(error);
-    sendJson(response, 500, { error: "Internal server error" });
+    sendJson(response, 500, { error: error.message || "Internal server error" });
   }
 }).listen(port, "0.0.0.0", () => {
   console.log(`Disco Playground listening on http://localhost:${port}`);

@@ -1,9 +1,11 @@
-const slugInput = document.querySelector("#slug");
 const editor = document.querySelector("#editor");
 const preview = document.querySelector("#preview");
 const statusLine = document.querySelector("#status");
 const fileTree = document.querySelector("#file-tree");
 const filePathInput = document.querySelector("#file-path");
+const folderUpload = document.querySelector("#folder-upload");
+const manifestForm = document.querySelector("#manifest-form");
+const manifestUrl = document.querySelector("#manifest-url");
 
 let files = {};
 let activeFile = "index.html";
@@ -15,78 +17,40 @@ const collapsedFolders = new Set();
 
 const defaultFiles = {
   "index.html": `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Hello RC</title>
-    <link rel="stylesheet" href="style.css">
-  </head>
-  <body>
-    <main>
-      <p class="kicker">hello from the playground</p>
-      <h1>Build something small and strange.</h1>
-      <p>Change the code, save it, then share the live URL with another Recurser.</p>
-      <button id="spark">Make it sparkle</button>
-    </main>
-    <script src="script.js"></script>
-  </body>
-</html>`,
-  "style.css": `body {
-  margin: 0;
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: #f7f2e8;
-  color: #1d1a16;
-}
-
-main {
-  width: min(720px, calc(100vw - 32px));
-}
-
-.kicker {
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  font-size: 12px;
-}
-
-h1 {
-  font-size: clamp(40px, 9vw, 88px);
-  line-height: 0.95;
-  margin: 0 0 20px;
-}
-
-button {
-  border: 1px solid #1d1a16;
-  border-radius: 6px;
-  padding: 10px 14px;
-  background: #ffffff;
-  color: inherit;
-  cursor: pointer;
-}`,
-  "script.js": `document.querySelector("#spark")?.addEventListener("click", () => {
-  document.body.style.background = \`hsl(\${Math.random() * 360} 70% 88%)\`;
-});`,
+<h1>Hello, RC</h1>`,
 };
 
-function cleanSlug(value) {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9-]/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
-}
+const textExtensions = new Set([
+  ".css",
+  ".csv",
+  ".html",
+  ".js",
+  ".json",
+  ".md",
+  ".mjs",
+  ".svg",
+  ".txt",
+  ".xml",
+]);
+
+const contentTypes = new Map([
+  [".css", "text/css"],
+  [".gif", "image/gif"],
+  [".html", "text/html"],
+  [".ico", "image/x-icon"],
+  [".jpeg", "image/jpeg"],
+  [".jpg", "image/jpeg"],
+  [".js", "text/javascript"],
+  [".json", "application/json"],
+  [".png", "image/png"],
+  [".svg", "image/svg+xml"],
+  [".txt", "text/plain"],
+  [".webp", "image/webp"],
+  [".xml", "application/xml"],
+]);
 
 function setStatus(message) {
   statusLine.textContent = message;
-}
-
-function currentSlug() {
-  const slug = cleanSlug(slugInput.value || "hello-rc");
-  slugInput.value = slug;
-  return slug;
 }
 
 function normalizePath(value) {
@@ -97,6 +61,23 @@ function normalizePath(value) {
     .replace(/(^|\/)\.\//g, "$1")
     .replaceAll("../", "")
     .trim();
+}
+
+function extension(path) {
+  const dot = path.lastIndexOf(".");
+  return dot === -1 ? "" : path.slice(dot).toLowerCase();
+}
+
+function contentType(path) {
+  return contentTypes.get(extension(path)) || "application/octet-stream";
+}
+
+function isBinaryFile(fileRecord) {
+  return fileRecord && typeof fileRecord === "object" && fileRecord.encoding === "base64";
+}
+
+function fileText(path) {
+  return typeof files[path] === "string" ? files[path] : "";
 }
 
 function sortedPaths() {
@@ -152,7 +133,7 @@ function renderTreeNode(node, parentPath = "", depth = 0) {
     button.type = "button";
     button.className = `tree-row file${file.path === activeFile ? " active" : ""}`;
     button.style.setProperty("--indent", `${depth * 14}px`);
-    button.textContent = file.name;
+    button.textContent = `${isBinaryFile(files[file.path]) ? "* " : ""}${file.name}`;
     button.title = file.path;
     button.addEventListener("click", () => selectFile(file.path));
     fragment.append(button);
@@ -167,34 +148,14 @@ function refreshFileTree() {
 }
 
 function render() {
-  const html = files["index.html"];
-  if (!html) {
+  if (!fileText("index.html")) {
+    preview.removeAttribute("src");
     preview.srcdoc = "<!doctype html><p>Add an index.html file to preview this app.</p>";
     return;
   }
 
-  const blobUrls = [];
-  const previewHtml = html.replace(
-    /(src|href)=["']\/?([^"':?#]+)["']/g,
-    (match, attr, path) => {
-      const normalized = normalizePath(path);
-      if (!(normalized in files)) {
-        return match;
-      }
-
-      const type = normalized.endsWith(".css")
-        ? "text/css"
-        : normalized.endsWith(".js")
-          ? "text/javascript"
-          : "text/plain";
-      const blobUrl = URL.createObjectURL(new Blob([files[normalized]], { type }));
-      blobUrls.push(blobUrl);
-      return `${attr}="${blobUrl}"`;
-    },
-  );
-
-  preview.srcdoc = previewHtml;
-  window.setTimeout(() => blobUrls.forEach((url) => URL.revokeObjectURL(url)), 1000);
+  preview.removeAttribute("srcdoc");
+  preview.src = `/?preview=${Date.now()}`;
 }
 
 function queueRender() {
@@ -212,23 +173,30 @@ function queueSave(delay = 700) {
 }
 
 function captureEditor() {
-  files[activeFile] = editor.value;
+  if (!isBinaryFile(files[activeFile])) {
+    files[activeFile] = editor.value;
+  }
 }
 
 function selectFile(file) {
   captureEditor();
   queueSave();
   activeFile = file;
-  editor.value = files[file];
+  if (isBinaryFile(files[file])) {
+    editor.value = `[binary file]\n${file}`;
+    editor.readOnly = true;
+  } else {
+    editor.value = fileText(file);
+    editor.readOnly = false;
+  }
   refreshFileTree();
   editor.focus();
 }
 
 async function loadApp() {
-  const slug = currentSlug();
   isLoading = true;
   setStatus("Loading...");
-  const response = await fetch(`/api/apps/${slug}`);
+  const response = await fetch("/api/files");
   if (!response.ok) {
     isLoading = false;
     setStatus("Could not load");
@@ -238,26 +206,26 @@ async function loadApp() {
   const nextApp = await response.json();
   files = nextApp.files || { ...defaultFiles };
   activeFile = files[activeFile] ? activeFile : sortedPaths()[0] || "index.html";
-  editor.value = files[activeFile];
+  editor.value = isBinaryFile(files[activeFile]) ? `[binary file]\n${activeFile}` : fileText(activeFile);
+  editor.readOnly = isBinaryFile(files[activeFile]);
   refreshFileTree();
   render();
   lastSavedPayload = JSON.stringify({ files });
   isLoading = false;
-  setStatus(`Loaded /p/${slug}/`);
+  setStatus("Loaded shared playground");
 }
 
 async function saveApp() {
-  const slug = currentSlug();
   captureEditor();
   const payload = JSON.stringify({ files });
   if (payload === lastSavedPayload) {
-    setStatus(`Saved /p/${slug}/`);
+    setStatus("Saved");
     return;
   }
 
   setStatus("Saving...");
 
-  const response = await fetch(`/api/apps/${slug}`, {
+  const response = await fetch("/api/files", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: payload,
@@ -269,7 +237,8 @@ async function saveApp() {
   }
 
   lastSavedPayload = payload;
-  setStatus(`Saved /p/${slug}/`);
+  setStatus("Saved");
+  render();
 }
 
 function addFile() {
@@ -306,6 +275,125 @@ function renameFile() {
   refreshFileTree();
   queueRender();
   queueSave(100);
+}
+
+function stripCommonRoot(paths) {
+  if (!paths.length || paths.some((path) => !path.includes("/"))) {
+    return paths;
+  }
+
+  const firstSegments = paths.map((path) => path.split("/")[0]);
+  if (!firstSegments.every((segment) => segment === firstSegments[0])) {
+    return paths;
+  }
+
+  return paths.map((path) => path.split("/").slice(1).join("/")).filter(Boolean);
+}
+
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      const result = String(reader.result || "");
+      resolve(result.slice(result.indexOf(",") + 1));
+    });
+    reader.addEventListener("error", () => reject(reader.error));
+    reader.readAsDataURL(file);
+  });
+}
+
+function readFileAsText(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => resolve(String(reader.result || "")));
+    reader.addEventListener("error", () => reject(reader.error));
+    reader.readAsText(file);
+  });
+}
+
+async function uploadFolder() {
+  const selected = Array.from(folderUpload.files || []);
+  folderUpload.value = "";
+  if (!selected.length) {
+    return;
+  }
+
+  if (!window.confirm(`Replace the shared playground with ${selected.length} uploaded files?`)) {
+    return;
+  }
+
+  setStatus("Reading upload...");
+  const rawPaths = selected.map((file) => file.webkitRelativePath || file.name);
+  const strippedPaths = stripCommonRoot(rawPaths).map(normalizePath);
+  const nextFiles = {};
+
+  for (const [index, file] of selected.entries()) {
+    const path = strippedPaths[index];
+    if (!path || file.size > 5 * 1024 * 1024) {
+      continue;
+    }
+
+    if (textExtensions.has(extension(path))) {
+      nextFiles[path] = await readFileAsText(file);
+    } else {
+      nextFiles[path] = {
+        encoding: "base64",
+        content: await readFileAsBase64(file),
+      };
+    }
+  }
+
+  files = Object.keys(nextFiles).length ? nextFiles : { ...defaultFiles };
+  activeFile = files["index.html"] ? "index.html" : sortedPaths()[0];
+  editor.value = isBinaryFile(files[activeFile]) ? `[binary file]\n${activeFile}` : fileText(activeFile);
+  editor.readOnly = isBinaryFile(files[activeFile]);
+  refreshFileTree();
+  render();
+  queueSave(100);
+}
+
+async function importManifest(event) {
+  event.preventDefault();
+  const url = manifestUrl.value.trim();
+  if (!url) {
+    return;
+  }
+
+  if (!window.confirm("Replace the shared playground with this manifest?")) {
+    return;
+  }
+
+  setStatus("Pulling manifest...");
+  const response = await fetch("/api/import-manifest", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
+  });
+
+  if (!response.ok) {
+    const details = await response.json().catch(() => ({}));
+    setStatus(details.error || "Could not import manifest");
+    return;
+  }
+
+  await loadApp();
+  setStatus("Imported manifest");
+}
+
+function resetPlayground() {
+  if (!window.confirm("Remove everything in the playground and reset to the default page?")) {
+    return;
+  }
+
+  files = { ...defaultFiles };
+  activeFile = "index.html";
+  editor.value = fileText(activeFile);
+  editor.readOnly = false;
+  collapsedFolders.clear();
+  refreshFileTree();
+  render();
+  queueSave(100);
+  setStatus("Trashed playground");
 }
 
 function deleteFile() {
@@ -346,13 +434,12 @@ editor.addEventListener("keydown", (event) => {
   }
 });
 
-slugInput.addEventListener("change", loadApp);
-slugInput.addEventListener("input", () => {
-  currentSlug();
-  setStatus(`Editing /p/${slugInput.value}/`);
-});
 filePathInput.addEventListener("change", renameFile);
 document.querySelector("#new-file").addEventListener("click", addFile);
 document.querySelector("#delete-file").addEventListener("click", deleteFile);
+document.querySelector("#upload-folder").addEventListener("click", () => folderUpload.click());
+document.querySelector("#trash-files").addEventListener("click", resetPlayground);
+folderUpload.addEventListener("change", uploadFolder);
+manifestForm.addEventListener("submit", importManifest);
 
 loadApp();

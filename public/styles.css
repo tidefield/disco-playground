@@ -1,8 +1,8 @@
 :root {
   color-scheme: light;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: #f4efe5;
-  color: #191714;
+  background: #ffffff;
+  color: #000000;
 }
 
 * {
@@ -30,20 +30,19 @@ textarea {
 
 .topbar {
   display: grid;
-  grid-template-columns: minmax(240px, 1fr) minmax(220px, 320px);
-  align-items: end;
+  grid-template-columns: minmax(180px, 1fr) minmax(280px, 520px) auto;
+  align-items: center;
   gap: 16px;
-  padding: 18px;
-  border: 1px solid #d8cdbb;
-  background: #fffaf2;
-  border-radius: 8px;
+  padding: 16px;
+  border: 1px solid #000000;
+  background: #ffffff;
 }
 
 .eyebrow {
   margin: 0 0 6px;
-  color: #6f604c;
+  color: #000000;
   font-size: 12px;
-  letter-spacing: 0.1em;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
@@ -53,35 +52,35 @@ h1 {
   line-height: 0.95;
 }
 
-.slug-field {
-  display: grid;
-  gap: 7px;
-  color: #6f604c;
-  font-size: 13px;
-}
-
-.slug-field input {
-  width: 100%;
-  min-height: 42px;
-  border: 1px solid #c8baa5;
-  border-radius: 6px;
-  padding: 0 12px;
-  background: #ffffff;
-  color: #191714;
-}
-
 button,
-.filebar select {
+.filebar select,
+.published-link,
+.manifest-form input {
   min-height: 38px;
-  border: 1px solid #191714;
-  border-radius: 6px;
+  border: 1px solid #000000;
   padding: 0 12px;
   background: #ffffff;
-  color: #191714;
+  color: #000000;
   text-decoration: none;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
+}
+
+.manifest-form {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.manifest-form input {
+  flex: 1;
+  min-width: 0;
+  cursor: text;
+}
+
+.published-link {
+  justify-content: center;
 }
 
 .workspace {
@@ -96,17 +95,15 @@ button,
   display: grid;
   grid-template-rows: auto 1fr;
   overflow: hidden;
-  border: 1px solid #d8cdbb;
-  border-radius: 8px;
-  background: #fffaf2;
+  border: 1px solid #000000;
+  background: #ffffff;
 }
 
 .editor-panel {
   min-height: 0;
   overflow: hidden;
-  border: 1px solid #d8cdbb;
-  border-radius: 8px;
-  background: #fffaf2;
+  border: 1px solid #000000;
+  background: #ffffff;
 }
 
 .file-layout {
@@ -119,8 +116,8 @@ button,
 .file-tree-panel {
   min-width: 0;
   overflow: auto;
-  border-right: 1px solid #d8cdbb;
-  background: #f7f1e8;
+  border-right: 1px solid #000000;
+  background: #ffffff;
 }
 
 .file-tree-title {
@@ -130,11 +127,16 @@ button,
   justify-content: space-between;
   gap: 8px;
   padding: 0 12px;
-  border-bottom: 1px solid #d8cdbb;
-  color: #6f604c;
+  border-bottom: 1px solid #000000;
+  color: #000000;
   font-size: 12px;
-  letter-spacing: 0.1em;
+  letter-spacing: 0;
   text-transform: uppercase;
+}
+
+.file-tree-actions {
+  display: flex;
+  gap: 6px;
 }
 
 .file-tree-title button {
@@ -142,9 +144,19 @@ button,
   min-height: 30px;
   justify-content: center;
   padding: 0;
-  border-color: #c8baa5;
+  border-color: #000000;
   font-size: 18px;
   line-height: 1;
+}
+
+.file-tree-title svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .file-tree {
@@ -159,7 +171,7 @@ button,
   border-radius: 0;
   padding: 0 8px 0 calc(12px + var(--indent));
   background: transparent;
-  color: #2b261f;
+  color: #000000;
   text-align: left;
   white-space: nowrap;
   overflow: hidden;
@@ -169,11 +181,12 @@ button,
 
 .tree-row:hover,
 .tree-row.active {
-  background: #e7dccd;
+  background: #eeeeee;
 }
 
 .tree-row.folder {
-  color: #6f604c;
+  color: #000000;
+  font-weight: 500;
 }
 
 .code-panel {
@@ -190,28 +203,27 @@ button,
   align-items: center;
   gap: 8px;
   padding: 8px;
-  border-bottom: 1px solid #d8cdbb;
+  border-bottom: 1px solid #000000;
 }
 
 .filebar select {
   width: min(45%, 280px);
-  border-color: #c8baa5;
+  border-color: #000000;
 }
 
 .filebar input {
   flex: 1;
   min-width: 0;
   min-height: 38px;
-  border: 1px solid #c8baa5;
-  border-radius: 6px;
+  border: 1px solid #000000;
   padding: 0 12px;
   background: #ffffff;
-  color: #191714;
+  color: #000000;
 }
 
 .filebar button {
   min-width: 70px;
-  border-color: #c8baa5;
+  border-color: #000000;
 }
 
 #editor {
@@ -221,15 +233,15 @@ button,
   resize: none;
   padding: 16px;
   outline: none;
-  background: #12100d;
-  color: #f6ead9;
+  background: #ffffff;
+  color: #000000;
   font: 14px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   tab-size: 2;
 }
 
 .preview-bar {
   justify-content: space-between;
-  color: #6f604c;
+  color: #000000;
   font-size: 13px;
 }
 

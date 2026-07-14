@@ -11,12 +11,12 @@
       <section class="topbar" aria-label="Playground controls">
         <div>
           <p class="eyebrow">RC Disco Playground</p>
-          <h1>Write a tiny app. See it live.</h1>
         </div>
-        <label class="slug-field">
-          <span>App slug</span>
-          <input id="slug" value="hello-rc" inputmode="url" autocomplete="off" />
-        </label>
+        <form id="manifest-form" class="manifest-form">
+          <input id="manifest-url" type="url" placeholder="Raw manifest URL" aria-label="Raw manifest URL" />
+          <button type="submit">Pull manifest</button>
+        </form>
+        <a class="published-link" href="/" target="_blank" rel="noreferrer">View live page</a>
       </section>
 
       <section class="workspace">
@@ -25,7 +25,20 @@
             <aside class="file-tree-panel" aria-label="Files">
               <div class="file-tree-title">
                 <span>Files</span>
-                <button id="new-file" type="button" title="New file">+</button>
+                <div class="file-tree-actions">
+                  <button id="upload-folder" type="button" title="Upload build folder">Upload</button>
+                  <button id="trash-files" type="button" title="Reset playground" aria-label="Reset playground">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M3 6h18" />
+                      <path d="M8 6V4h8v2" />
+                      <path d="M6 6l1 15h10l1-15" />
+                      <path d="M10 10v7" />
+                      <path d="M14 10v7" />
+                    </svg>
+                  </button>
+                  <button id="new-file" type="button" title="New file">+</button>
+                </div>
+                <input id="folder-upload" type="file" webkitdirectory directory multiple hidden />
               </div>
               <div id="file-tree" class="file-tree"></div>
             </aside>

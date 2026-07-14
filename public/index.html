@@ -17,25 +17,22 @@
           <span>App slug</span>
           <input id="slug" value="hello-rc" inputmode="url" autocomplete="off" />
         </label>
-        <div class="actions">
-          <button id="load" type="button">Load</button>
-          <button id="save" type="button">Save</button>
-          <button id="new-file" type="button">New file</button>
-          <button id="delete-file" type="button">Delete file</button>
-          <a id="open" href="/p/hello-rc/" target="_blank" rel="noreferrer">Open</a>
-        </div>
       </section>
 
       <section class="workspace">
         <div class="editor-panel">
           <div class="file-layout">
             <aside class="file-tree-panel" aria-label="Files">
-              <div class="file-tree-title">Files</div>
+              <div class="file-tree-title">
+                <span>Files</span>
+                <button id="new-file" type="button" title="New file">+</button>
+              </div>
               <div id="file-tree" class="file-tree"></div>
             </aside>
             <div class="code-panel">
               <div class="filebar">
                 <input id="file-path" autocomplete="off" spellcheck="false" aria-label="Current file path" />
+                <button id="delete-file" type="button" title="Delete current file">Delete</button>
               </div>
               <textarea id="editor" spellcheck="false" aria-label="Code editor"></textarea>
             </div>

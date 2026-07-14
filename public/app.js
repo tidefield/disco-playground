@@ -2,13 +2,15 @@ const slugInput = document.querySelector("#slug");
 const editor = document.querySelector("#editor");
 const preview = document.querySelector("#preview");
 const statusLine = document.querySelector("#status");
-const openLink = document.querySelector("#open");
 const fileTree = document.querySelector("#file-tree");
 const filePathInput = document.querySelector("#file-path");
 
 let files = {};
 let activeFile = "index.html";
 let renderTimer;
+let saveTimer;
+let lastSavedPayload = "";
+let isLoading = false;
 const collapsedFolders = new Set();
 
 const defaultFiles = {
@@ -84,7 +86,6 @@ function setStatus(message) {
 function currentSlug() {
   const slug = cleanSlug(slugInput.value || "hello-rc");
   slugInput.value = slug;
-  openLink.href = `/p/${slug}/`;
   return slug;
 }
 
@@ -201,12 +202,22 @@ function queueRender() {
   renderTimer = window.setTimeout(render, 120);
 }
 
+function queueSave(delay = 700) {
+  if (isLoading) {
+    return;
+  }
+
+  window.clearTimeout(saveTimer);
+  saveTimer = window.setTimeout(saveApp, delay);
+}
+
 function captureEditor() {
   files[activeFile] = editor.value;
 }
 
 function selectFile(file) {
   captureEditor();
+  queueSave();
   activeFile = file;
   editor.value = files[file];
   refreshFileTree();
@@ -215,9 +226,11 @@ function selectFile(file) {
 
 async function loadApp() {
   const slug = currentSlug();
+  isLoading = true;
   setStatus("Loading...");
   const response = await fetch(`/api/apps/${slug}`);
   if (!response.ok) {
+    isLoading = false;
     setStatus("Could not load");
     return;
   }
@@ -228,18 +241,26 @@ async function loadApp() {
   editor.value = files[activeFile];
   refreshFileTree();
   render();
+  lastSavedPayload = JSON.stringify({ files });
+  isLoading = false;
   setStatus(`Loaded /p/${slug}/`);
 }
 
 async function saveApp() {
   const slug = currentSlug();
   captureEditor();
+  const payload = JSON.stringify({ files });
+  if (payload === lastSavedPayload) {
+    setStatus(`Saved /p/${slug}/`);
+    return;
+  }
+
   setStatus("Saving...");
 
   const response = await fetch(`/api/apps/${slug}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ files }),
+    body: payload,
   });
 
   if (!response.ok) {
@@ -247,6 +268,7 @@ async function saveApp() {
     return;
   }
 
+  lastSavedPayload = payload;
   setStatus(`Saved /p/${slug}/`);
 }
 
@@ -262,6 +284,7 @@ function addFile() {
   }
   selectFile(path);
   queueRender();
+  queueSave(100);
 }
 
 function renameFile() {
@@ -282,6 +305,7 @@ function renameFile() {
   activeFile = nextPath;
   refreshFileTree();
   queueRender();
+  queueSave(100);
 }
 
 function deleteFile() {
@@ -299,11 +323,13 @@ function deleteFile() {
   editor.value = files[activeFile];
   refreshFileTree();
   queueRender();
+  queueSave(100);
 }
 
 editor.addEventListener("input", () => {
   captureEditor();
   queueRender();
+  queueSave();
 });
 
 editor.addEventListener("keydown", (event) => {
@@ -316,13 +342,16 @@ editor.addEventListener("keydown", (event) => {
     editor.selectionEnd = start + 2;
     captureEditor();
     queueRender();
+    queueSave();
   }
 });
 
-slugInput.addEventListener("input", currentSlug);
+slugInput.addEventListener("change", loadApp);
+slugInput.addEventListener("input", () => {
+  currentSlug();
+  setStatus(`Editing /p/${slugInput.value}/`);
+});
 filePathInput.addEventListener("change", renameFile);
-document.querySelector("#load").addEventListener("click", loadApp);
-document.querySelector("#save").addEventListener("click", saveApp);
 document.querySelector("#new-file").addEventListener("click", addFile);
 document.querySelector("#delete-file").addEventListener("click", deleteFile);
 

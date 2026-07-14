@@ -1,0 +1,14 @@
+{
+  "name": "disco-playground",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "PLAYGROUND_DATA_DIR=.data node server.mjs",
+    "check": "node --check server.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Disco Playground</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="topbar" aria-label="Playground controls">
+        <div>
+          <p class="eyebrow">RC Disco Playground</p>
+          <h1>Write a tiny app. See it live.</h1>
+        </div>
+        <label class="slug-field">
+          <span>App slug</span>
+          <input id="slug" value="hello-rc" inputmode="url" autocomplete="off" />
+        </label>
+        <div class="actions">
+          <button id="load" type="button">Load</button>
+          <button id="save" type="button">Save</button>
+          <a id="open" href="/p/hello-rc/" target="_blank" rel="noreferrer">Open</a>
+        </div>
+      </section>
+
+      <section class="workspace">
+        <div class="editor-panel">
+          <div class="tabs" role="tablist" aria-label="Files">
+            <button class="tab active" type="button" data-file="html">HTML</button>
+            <button class="tab" type="button" data-file="css">CSS</button>
+            <button class="tab" type="button" data-file="js">JS</button>
+          </div>
+          <textarea id="editor" spellcheck="false" aria-label="Code editor"></textarea>
+        </div>
+
+        <div class="preview-panel">
+          <div class="preview-bar">
+            <span id="status">Ready</span>
+          </div>
+          <iframe id="preview" title="Live preview" sandbox="allow-scripts allow-modals"></iframe>
+        </div>
+      </section>
+    </main>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
